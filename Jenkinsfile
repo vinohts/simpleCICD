@@ -1,23 +1,24 @@
 pipeline {
     agent any
 
+    parameters {
+        string(name: 'S3_BUCKET', defaultValue: 'simplecicd-artifacts-vino', description: 'S3 bucket to upload artifact')
+        string(name: 'AWS_REGION', defaultValue: 'ap-south-1', description: 'AWS region for S3')
+    }
+
     environment {
         BUILD_CONFIGURATION = "Release"
         OUTPUT_DIR = "publish"
         ARTIFACT_NAME = "simplecicd.zip"
         API_PROJECT = "SimpleCICD.Api\\SimpleCICD.Api.csproj"
         TEST_PROJECT = "SimpleCICD.Tests\\SimpleCICD.Tests.csproj"
-        DEST_DIR = "D:\\temp"               // destination on the agent where we will copy artifact
     }
 
     stages {
-        stage('Checkout') {
-            steps { checkout scm }
-        }
+        stage('Checkout') { steps { checkout scm } }
 
         stage('Restore & Build') {
             steps {
-                echo "Restoring and building projects..."
                 bat 'dotnet --info'
                 bat "dotnet restore \"%API_PROJECT%\""
                 bat "dotnet restore \"%TEST_PROJECT%\""
@@ -28,16 +29,13 @@ pipeline {
 
         stage('Test') {
             steps {
-                echo "Running tests..."
                 bat "dotnet test \"%TEST_PROJECT%\" -c %BUILD_CONFIGURATION% --no-build --verbosity normal"
             }
         }
 
         stage('Publish') {
             steps {
-                echo "Publishing API project to folder: ${env.OUTPUT_DIR}"
                 bat "dotnet publish \"%API_PROJECT%\" -c %BUILD_CONFIGURATION% -o %OUTPUT_DIR%"
-                // create zip of publish folder
                 bat """
                     powershell -Command "if (Test-Path '${ARTIFACT_NAME}') { Remove-Item '${ARTIFACT_NAME}' -Force }; Compress-Archive -Path ${OUTPUT_DIR}\\\\* -DestinationPath ${ARTIFACT_NAME} -Force"
                 """
@@ -47,11 +45,9 @@ pipeline {
         stage('Replace Secret Placeholder') {
             steps {
                 withCredentials([string(credentialsId: 'MY_API_KEY', variable: 'MY_API_KEY')]) {
-                    echo "Injecting secret into ${env.OUTPUT_DIR}\\appsettings.json..."
                     bat '''
                         powershell -Command "(Get-Content \"%OUTPUT_DIR%\\appsettings.json\") -replace '\\$\\{API_KEY_PLACEHOLDER\\}', '$env:MY_API_KEY' | Set-Content \"%OUTPUT_DIR%\\appsettings.json\""
                     '''
-                    // recreate zip so it contains replaced file
                     bat """
                         powershell -Command "if (Test-Path '${ARTIFACT_NAME}') { Remove-Item '${ARTIFACT_NAME}' -Force }; Compress-Archive -Path ${OUTPUT_DIR}\\\\* -DestinationPath ${ARTIFACT_NAME} -Force"
                     """
@@ -61,29 +57,30 @@ pipeline {
 
         stage('Archive Artifact') {
             steps {
-                echo "Archiving artifact to Jenkins"
                 archiveArtifacts artifacts: "${ARTIFACT_NAME}", fingerprint: true
             }
         }
 
-        stage('Copy artifact to D:\\\\temp') {
+        stage('Upload to S3') {
             steps {
-                echo "Copying ${ARTIFACT_NAME} to ${env.DEST_DIR} on agent"
-                // Ensure destination exists and copy the artifact from the workspace root
-                bat """
-                    if not exist "${DEST_DIR}" (mkdir "${DEST_DIR}")
-                    copy /Y "%WORKSPACE%\\${ARTIFACT_NAME}" "${DEST_DIR}\\${ARTIFACT_NAME}"
-                """
+                // Using a "Username with password" credential in Jenkins where:
+                // username = AWS_ACCESS_KEY_ID, password = AWS_SECRET_ACCESS_KEY
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials-id', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    echo "Uploading ${ARTIFACT_NAME} to s3://${params.S3_BUCKET}/ in region ${params.AWS_REGION}"
+                    // Use same bat so env vars exist for the aws call
+                    bat """
+                        set AWS_ACCESS_KEY_ID=%AWS_ACCESS_KEY_ID%
+                        set AWS_SECRET_ACCESS_KEY=%AWS_SECRET_ACCESS_KEY%
+                        set AWS_DEFAULT_REGION=${params.AWS_REGION}
+                        aws s3 cp "%WORKSPACE%\\${ARTIFACT_NAME}" "s3://${params.S3_BUCKET}/${ARTIFACT_NAME}" --region ${params.AWS_REGION}
+                    """
+                }
             }
         }
     }
 
     post {
-        success {
-            echo "Pipeline completed successfully. Artifact copied to ${env.DEST_DIR}"
-        }
-        failure {
-            echo "Pipeline FAILED — check logs."
-        }
+        success { echo "Pipeline finished; artifact uploaded to s3://${params.S3_BUCKET}/${ARTIFACT_NAME}" }
+        failure { echo "Pipeline failed — check console output." }
     }
 }
