@@ -28,13 +28,16 @@ pipeline {
 
                 // Build the API project
                 bat "dotnet build \"%API_PROJECT%\" -c %BUILD_CONFIGURATION% --no-restore"
+
+                // Build the TEST project so the test dll exists for dotnet test
+                bat "dotnet build \"%TEST_PROJECT%\" -c %BUILD_CONFIGURATION% --no-restore"
             }
         }
 
         stage('Test') {
             steps {
                 echo "Running tests..."
-                // Run tests by pointing to the test project directly
+                // Now the test assembly will exist because we built the test project above.
                 bat "dotnet test \"%TEST_PROJECT%\" -c %BUILD_CONFIGURATION% --no-build --verbosity normal"
             }
         }
