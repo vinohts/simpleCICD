@@ -1,0 +1,7 @@
+D:\devops-handson\SimpleCICD\publish\SimpleCICD.Api.exe
+D:\devops-handson\SimpleCICD\publish\appsettings.Development.json
+D:\devops-handson\SimpleCICD\publish\appsettings.json
+D:\devops-handson\SimpleCICD\publish\SimpleCICD.Api.dll
+D:\devops-handson\SimpleCICD\publish\SimpleCICD.Api.deps.json
+D:\devops-handson\SimpleCICD\publish\SimpleCICD.Api.runtimeconfig.json
+D:\devops-handson\SimpleCICD\publish\SimpleCICD.Api.pdb

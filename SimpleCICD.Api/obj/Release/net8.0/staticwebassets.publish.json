@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "BhfeqXpBvs5mfkdh+kdnECIE8SkJrqfZrEHGfOJp+z0=",
+  "Source": "SimpleCICD.Api",
+  "BasePath": "_content/SimpleCICD.Api",
+  "Mode": "Default",
+  "ManifestType": "Publish",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
