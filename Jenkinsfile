@@ -12,6 +12,7 @@ pipeline {
     ARTIFACT_NAME = "simplecicd.zip"
     API_PROJECT = "SimpleCICD.Api\\SimpleCICD.Api.csproj"
     TEST_PROJECT = "SimpleCICD.Tests\\SimpleCICD.Tests.csproj"
+    DEST_DIR = "D:\\temp"
   }
 
   stages {
@@ -61,10 +62,22 @@ pipeline {
       }
     }
 
+    stage('Copy artifact to D:\\\\temp') {
+      steps {
+        echo "Copying ${ARTIFACT_NAME} to ${env.DEST_DIR}"
+        bat """
+          if not exist "${DEST_DIR}" (mkdir "${DEST_DIR}")
+          copy /Y "%WORKSPACE%\\${ARTIFACT_NAME}" "${DEST_DIR}\\${ARTIFACT_NAME}"
+        """
+      }
+    }
+
     stage('Upload to S3') {
       steps {
+        // Uses AWS Credentials plugin object; requires Pipeline: AWS Steps plugin
         withAWS(credentials: 'aws-credentials-id', region: "${params.AWS_REGION}") {
           echo "Uploading ${ARTIFACT_NAME} to s3://${params.S3_BUCKET}/"
+          // aws CLI must be installed on the agent
           bat """
             aws s3 cp "%WORKSPACE%\\${ARTIFACT_NAME}" "s3://${params.S3_BUCKET}/${ARTIFACT_NAME}" --region ${params.AWS_REGION}
           """
@@ -74,7 +87,11 @@ pipeline {
   }
 
   post {
-    success { echo "Pipeline succeeded. Artifact uploaded to s3://${params.S3_BUCKET}/${ARTIFACT_NAME}" }
-    failure { echo "Pipeline failed — check console output." }
+    success {
+      echo "Pipeline completed successfully. Artifact copied to ${env.DEST_DIR} and uploaded to s3://${params.S3_BUCKET}/${ARTIFACT_NAME}"
+    }
+    failure {
+      echo "Pipeline FAILED — check console output."
+    }
   }
 }
